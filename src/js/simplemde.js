@@ -1,4 +1,5 @@
-/*global require,module*/
+/*eslint no-useless-escape: ["warn"]*/
+/*eslint no-prototype-builtins: ["warn"]*/
 "use strict";
 var CodeMirror = require("codemirror");
 require("codemirror/addon/edit/continuelist.js");
@@ -1296,6 +1297,57 @@ function SimpleMDE(options) {
 		document.getElementsByTagName("head")[0].appendChild(link);
 	}
 
+	console.log("customTokens", options);
+	if(options.hasOwnProperty("customTokens")) {
+		console.log("customTokens", options.customTokens);
+		var tokenFun = function(stream, state) {
+			for(var token in options.customTokens) {
+				if(options.customTokens.hasOwnProperty(token) &&
+					stream.match(options.customTokens[token])) {
+					state.combineTokens = true;
+					return token;
+				}
+			}
+			stream.next();
+			return null;
+		};
+
+		var gfmOverlay = {
+			startState: function() {
+				return {
+					code: false,
+					codeBlock: false,
+					ateSpace: false
+				};
+			},
+			copyState: function(s) {
+				return {
+					code: s.code,
+					codeBlock: s.codeBlock,
+					ateSpace: s.ateSpace
+				};
+			},
+			token: tokenFun,
+			blankLine: function(s) {
+				s.code = false;
+				return null;
+			}
+		};
+
+		var markdownConfig = {
+			taskLists: true,
+			strikethrough: true,
+			emoji: true
+		};
+
+		CodeMirror.defineMode("custom", function(config, modeConfig) {
+			for(var attr in modeConfig) {
+				markdownConfig[attr] = modeConfig[attr];
+			}
+			markdownConfig.name = "gfm";
+			return CodeMirror.overlayMode(CodeMirror.getMode(config, markdownConfig), gfmOverlay);
+		}, "gfm");
+	}
 
 	// Find the textarea to use
 	if(options.element) {
@@ -1464,10 +1516,11 @@ SimpleMDE.prototype.render = function(el) {
 	}, false);
 
 	var mode, backdrop;
+	var optName = options.hasOwnProperty("customTokens") ? "custom" : "gfm";
 	if(options.spellChecker !== false) {
 		mode = "spell-checker";
 		backdrop = options.parsingConfig;
-		backdrop.name = "gfm";
+		backdrop.name = optName;
 		backdrop.gitHubSpice = false;
 
 		CodeMirrorSpellChecker({
@@ -1475,7 +1528,7 @@ SimpleMDE.prototype.render = function(el) {
 		});
 	} else {
 		mode = options.parsingConfig;
-		mode.name = "gfm";
+		mode.name = optName;
 		mode.gitHubSpice = false;
 	}
 
@@ -1532,7 +1585,7 @@ function isLocalStorageAvailable() {
 		try {
 			localStorage.setItem("smde_localStorage", 1);
 			localStorage.removeItem("smde_localStorage");
-		} catch(e) {
+		} catch (e) {
 			return false;
 		}
 	} else {
